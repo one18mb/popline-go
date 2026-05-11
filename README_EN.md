@@ -30,8 +30,8 @@ Data: `package.json` (17011 B) → `package.pln` (13074 B, **76.9%**), 5000 iter
 
 | Operation | encoding/json | popline | Ratio |
 |-----------|--------------|---------|-------|
-| Parse | 1785 ms (357 µs/op) | 1232 ms (246 µs/op) | **0.69x** |
-| Serialize | 1522 ms (304 µs/op) | 503 ms (101 µs/op) | **0.33x** |
+| Parse | 1929 ms (385 µs/op) | 1308 ms (261 µs/op) | **0.68x** |
+| Serialize | 1486 ms (297 µs/op) | 552 ms (110 µs/op) | **0.37x** |
 
 ## Test
 
