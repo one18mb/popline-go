@@ -26,12 +26,12 @@ obj.AddToObject("name", pln.NewString("test"))
 
 ## Performance
 
-Data: `package.json` (17011 B) / `package.pln` (13074 B, 76.9%)
+Data: `package.json` (17011 B) → `package.pln` (13074 B, **76.9%**), 5000 iterations
 
 | Operation | encoding/json | popline | Ratio |
 |-----------|--------------|---------|-------|
-| Parse | 1785 ms | 1232 ms | **0.69x** |
-| Serialize | 1522 ms | 503 ms | **0.33x** |
+| Parse | 1785 ms (357 µs/op) | 1232 ms (246 µs/op) | **0.69x** |
+| Serialize | 1522 ms (304 µs/op) | 503 ms (101 µs/op) | **0.33x** |
 
 ## Test
 

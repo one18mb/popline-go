@@ -26,12 +26,12 @@ obj.AddToObject("name", pln.NewString("test"))
 
 ## 性能
 
-测试数据：`package.json`（17011 字节） / `package.pln`（13074 字节，76.9%）
+测试数据：`package.json`（17011 B）→ `package.pln`（13074 B，**76.9%**），5000 次迭代
 
 | 操作 | encoding/json | pln | 比 |
 |------|--------------|------|------|
-| 解析 | 1785 ms | 1232 ms | **0.69x** |
-| 序列化 | 1522 ms | 503 ms | **0.33x** |
+| 解析 | 1785 ms (357 µs/op) | 1232 ms (246 µs/op) | **0.69x** |
+| 序列化 | 1522 ms (304 µs/op) | 503 ms (101 µs/op) | **0.33x** |
 
 ## 测试
 
