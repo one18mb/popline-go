@@ -1,4 +1,4 @@
-package popline
+package pln
 
 import (
 	"strconv"
@@ -13,7 +13,7 @@ type generator struct {
 	awaitingValue bool
 }
 
-func Dumps(v *Value) string {
+func Marshal(v *Value) string {
 	g := &generator{}
 	g.writeValue(v)
 	return g.buf.String()

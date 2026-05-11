@@ -1,4 +1,4 @@
-package popline
+package pln
 
 import (
 	"encoding/json"
@@ -21,42 +21,42 @@ func chk(t *testing.T, v *Value, err error) *Value {
 }
 
 func TestBasicTypes(t *testing.T) {
-	v, e := Loads("{\nname: \"popline\"\n"); v = chk(t, v, e)
+	v, e := Unmarshal("{\nname: \"popline\"\n"); v = chk(t, v, e)
 	assert(t, v.Children()[0].Str() == "popline", "string")
 
-	v, e = Loads("{\na: 42\n"); v = chk(t, v, e)
+	v, e = Unmarshal("{\na: 42\n"); v = chk(t, v, e)
 	assert(t, v.Children()[0].Int() == 42, "int")
 
-	v, e = Loads("{\na: 3.14\n"); v = chk(t, v, e)
+	v, e = Unmarshal("{\na: 3.14\n"); v = chk(t, v, e)
 	assert(t, v.Children()[0].Type == Float, "float")
 
-	v, e = Loads("{\na: true\nb: false\nc: null\n"); v = chk(t, v, e)
+	v, e = Unmarshal("{\na: true\nb: false\nc: null\n"); v = chk(t, v, e)
 	assert(t, v.Children()[0].Bool(), "true")
 	assert(t, !v.Children()[1].Bool(), "false")
 	assert(t, v.Children()[2].Type == Null, "null")
 }
 
 func TestNesting(t *testing.T) {
-	v, e := Loads("{\nouter: {\ninner: \"value\"\n"); v = chk(t, v, e)
+	v, e := Unmarshal("{\nouter: {\ninner: \"value\"\n"); v = chk(t, v, e)
 	assert(t, v.Children()[0].Children()[0].Str() == "value", "nested")
 }
 
 func TestPop(t *testing.T) {
-	v, e := Loads("{\nouter: {\ninner: \"x\"\n1 mid: \"y\"\n"); v = chk(t, v, e)
+	v, e := Unmarshal("{\nouter: {\ninner: \"x\"\n1 mid: \"y\"\n"); v = chk(t, v, e)
 	assert(t, len(v.Children()) == 2, "pop count")
 
-	v, e = Loads("{\na: {\nb: {\nc: \"deep\"\n2 x: \"top\"\n"); v = chk(t, v, e)
+	v, e = Unmarshal("{\na: {\nb: {\nc: \"deep\"\n2 x: \"top\"\n"); v = chk(t, v, e)
 	assert(t, v.Children()[1].Str() == "top", "batch pop")
 }
 
 func TestStrings(t *testing.T) {
-	v, e := Loads("{\nmsg: \"He said: \"\"Hello\"\"\"\n"); v = chk(t, v, e)
+	v, e := Unmarshal("{\nmsg: \"He said: \"\"Hello\"\"\"\n"); v = chk(t, v, e)
 	assert(t, v.Children()[0].Str() == "He said: \"Hello\"", "escape")
 }
 
 func TestErrors(t *testing.T) {
 	for _, s := range []string{"42\n", "\"str\"\n", "true\n", "{\nbad:key: 1\n", "{\n\"key\": 1\n"} {
-		if _, err := Loads(s); err == nil {
+		if _, err := Unmarshal(s); err == nil {
 			t.Fatalf("expected error for: %s", s[:20])
 		}
 	}
@@ -74,10 +74,10 @@ func TestRoundtrip(t *testing.T) {
 	}
 	for i, input := range cases {
 		t.Run(fmt.Sprintf("rt-%d", i), func(t *testing.T) {
-			v1, err := Loads(input)
+			v1, err := Unmarshal(input)
 			if err != nil { t.Fatal(err) }
-			s := Dumps(v1)
-			v2, err := Loads(s)
+			s := Marshal(v1)
+			v2, err := Unmarshal(s)
 			if err != nil { t.Fatal(err) }
 			if !v1.Equal(v2) { t.Fatal("roundtrip mismatch") }
 		})
@@ -101,7 +101,7 @@ func TestRealDataConsistency(t *testing.T) {
 	}
 
 	// PopLine parse
-	plnVal, err := Loads(plnStr)
+	plnVal, err := Unmarshal(plnStr)
 	if err != nil { t.Fatal(err) }
 
 	// Verify PopLine DOM matches JSON via JSON serialization
@@ -114,8 +114,8 @@ func TestRealDataConsistency(t *testing.T) {
 	assert(t, string(jsonRef) == string(plnRef), "PopLine vs JSON mismatch")
 
 	// Roundtrip
-	s := Dumps(plnVal)
-	v2, err := Loads(s)
+	s := Marshal(plnVal)
+	v2, err := Unmarshal(s)
 	if err != nil { t.Fatal(err) }
 	assert(t, plnVal.Equal(v2), "PopLine roundtrip mismatch")
 
@@ -164,7 +164,7 @@ func TestBenchmark(t *testing.T) {
 
 	var jsonObj interface{}
 	json.Unmarshal(jsonBytes, &jsonObj)
-	plnVal, _ := Loads(plnStr)
+	plnVal, _ := Unmarshal(plnStr)
 
 	N := 5000
 	fmt.Println("\n── Performance Benchmark (5000 iterations) ──")
@@ -180,12 +180,12 @@ func TestBenchmark(t *testing.T) {
 	}
 
 	jsSer := bench("json.Marshal", func() { json.Marshal(jsonObj) })
-	plSer := bench("PopLine.Dumps", func() { Dumps(plnVal) })
+	plSer := bench("PopLine.Marshal", func() { Marshal(plnVal) })
 	fmt.Printf("  %-26s %7.2fx\n", "PopLine/JSON", float64(plSer)/float64(jsSer))
 
 	jsPar := bench("json.Unmarshal", func() {
 		var v interface{}; json.Unmarshal(jsonBytes, &v)
 	})
-	plPar := bench("PopLine.Loads", func() { Loads(plnStr) })
+	plPar := bench("PopLine.Unmarshal", func() { Unmarshal(plnStr) })
 	fmt.Printf("  %-26s %7.2fx\n", "PopLine/JSON", float64(plPar)/float64(jsPar))
 }

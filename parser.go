@@ -1,4 +1,4 @@
-package popline
+package pln
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ type parser struct {
 	inString  bool
 }
 
-func Loads(text string) (*Value, error) {
+func Unmarshal(text string) (*Value, error) {
 	p := &parser{}
 	return p.parse(text)
 }
