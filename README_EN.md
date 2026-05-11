@@ -11,17 +11,17 @@ go get github.com/one18mb/popline-go
 ## Usage
 
 ```go
-import "github.com/one18mb/popline-go"
+import "github.com/one18mb/popline-go" // package pln
 
 // Parse
-v, err := popline.Loads("{\nkey: \"value\"\n")
+v, err := pln.Unmarshal("{\nkey: \"value\"\n")
 
 // Serialize
-s := popline.Dumps(v)
+s := pln.Marshal(v)
 
 // Build DOM
-obj := popline.NewObject()
-obj.AddToObject("name", popline.NewString("test"))
+obj := pln.NewObject()
+obj.AddToObject("name", pln.NewString("test"))
 ```
 
 ## Performance
