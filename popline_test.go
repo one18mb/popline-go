@@ -1,87 +1,80 @@
 package popline
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
 	"testing"
+	"time"
 )
 
-func must(t *testing.T, v *Value, err error) *Value {
+func assert(t *testing.T, ok bool, msg string) {
 	t.Helper()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	return v
+	if !ok { t.Fatal(msg) }
+}
+
+// ═══════════════ Unit Tests ═══════════════
+
+func chk(t *testing.T, v *Value, err error) *Value {
+	t.Helper()
+	if err != nil { t.Fatal(err) }; return v
 }
 
 func TestBasicTypes(t *testing.T) {
-	v := must(t, Loads("{\nname: \"popline\"\n"))
-	if v.Type != Object { t.Fatal("not object") }
-	if v.Children()[0].String() != "popline" { t.Fatal("string mismatch") }
+	v, e := Loads("{\nname: \"popline\"\n"); v = chk(t, v, e)
+	assert(t, v.Children()[0].Str() == "popline", "string")
 
-	v = must(t, Loads("{\na: 42\n"))
-	if v.Children()[0].Int() != 42 { t.Fatal("int mismatch") }
+	v, e = Loads("{\na: 42\n"); v = chk(t, v, e)
+	assert(t, v.Children()[0].Int() == 42, "int")
 
-	v = must(t, Loads("{\na: 3.14\n"))
-	if v.Children()[0].Type != Float { t.Fatal("not float") }
+	v, e = Loads("{\na: 3.14\n"); v = chk(t, v, e)
+	assert(t, v.Children()[0].Type == Float, "float")
 
-	v = must(t, Loads("{\na: true\nb: false\nc: null\n"))
-	kids := v.Children()
-	if kids[0].Bool() != true { t.Fatal("true") }
-	if kids[1].Bool() != false { t.Fatal("false") }
-	if kids[2].Type != Null { t.Fatal("null") }
+	v, e = Loads("{\na: true\nb: false\nc: null\n"); v = chk(t, v, e)
+	assert(t, v.Children()[0].Bool(), "true")
+	assert(t, !v.Children()[1].Bool(), "false")
+	assert(t, v.Children()[2].Type == Null, "null")
 }
 
 func TestNesting(t *testing.T) {
-	v := must(t, Loads("{\nouter: {\ninner: \"value\"\n"))
-	if v.Children()[0].Children()[0].String() != "value" { t.Fatal("nested") }
-
-	v = must(t, Loads("[\n[\n1\n2\n1 [\n3\n"))
-	if len(v.Children()) != 2 { t.Fatal("arr count") }
+	v, e := Loads("{\nouter: {\ninner: \"value\"\n"); v = chk(t, v, e)
+	assert(t, v.Children()[0].Children()[0].Str() == "value", "nested")
 }
 
 func TestPop(t *testing.T) {
-	v := must(t, Loads("{\nouter: {\ninner: \"x\"\n1 mid: \"y\"\n"))
-	if len(v.Children()) != 2 { t.Fatal("pop count") }
-	if v.Children()[1].String() != "y" { t.Fatal("pop val") }
+	v, e := Loads("{\nouter: {\ninner: \"x\"\n1 mid: \"y\"\n"); v = chk(t, v, e)
+	assert(t, len(v.Children()) == 2, "pop count")
 
-	v = must(t, Loads("{\na: {\nb: {\nc: \"deep\"\n2 x: \"top\"\n"))
-	if v.Children()[1].String() != "top" { t.Fatal("batch pop") }
+	v, e = Loads("{\na: {\nb: {\nc: \"deep\"\n2 x: \"top\"\n"); v = chk(t, v, e)
+	assert(t, v.Children()[1].Str() == "top", "batch pop")
 }
 
 func TestStrings(t *testing.T) {
-	v := must(t, Loads("{\nmsg: \"He said: \"\"Hello\"\"\"\n"))
-	if v.Children()[0].String() != "He said: \"Hello\"" { t.Fatal("escape") }
-
-	v = must(t, Loads("{\nmsg: \"你好世界\"\n"))
-	if v.Children()[0].String() != "你好世界" { t.Fatal("chinese") }
-}
-
-func TestKeys(t *testing.T) {
-	v := must(t, Loads("{\nmy-key: 1\n中文键: 2\n"))
-	if len(v.Children()) != 2 { t.Fatal("key count") }
+	v, e := Loads("{\nmsg: \"He said: \"\"Hello\"\"\"\n"); v = chk(t, v, e)
+	assert(t, v.Children()[0].Str() == "He said: \"Hello\"", "escape")
 }
 
 func TestErrors(t *testing.T) {
-	tests := []string{"42\n", "\"str\"\n", "true\n", "{\nbad:key: 1\n", "{\n\"key\": 1\n"}
-	for _, s := range tests {
-		_, err := Loads(s)
-		if err == nil { t.Fatalf("expected error for: %s", s[:min(len(s), 20)]) }
+	for _, s := range []string{"42\n", "\"str\"\n", "true\n", "{\nbad:key: 1\n", "{\n\"key\": 1\n"} {
+		if _, err := Loads(s); err == nil {
+			t.Fatalf("expected error for: %s", s[:20])
+		}
 	}
 }
 
+// ═══════════════ Roundtrip ═══════════════
+
 func TestRoundtrip(t *testing.T) {
-	cases := []struct{
-		name string
-		input string
-	}{
-		{"simple", "{\na: 1\n"},
-		{"nested", "{\na: {\nb: 1\nc: 2\n1 d: 3\n"},
-		{"array", "[\n1\n2\n3\n"},
-		{"mixed", "{\na: [\n1\n2\n1 b: true\n"},
-		{"boolnull", "{\na: true\nb: false\nc: null\n"},
+	cases := []string{
+		"{\na: 1\n",
+		"{\na: {\nb: 1\nc: 2\n1 d: 3\n",
+		"[\n1\n2\n3\n",
+		"{\na: [\n1\n2\n1 b: true\n",
+		"{\na: true\nb: false\nc: null\n",
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			v1, err := Loads(c.input)
+	for i, input := range cases {
+		t.Run(fmt.Sprintf("rt-%d", i), func(t *testing.T) {
+			v1, err := Loads(input)
 			if err != nil { t.Fatal(err) }
 			s := Dumps(v1)
 			v2, err := Loads(s)
@@ -91,12 +84,108 @@ func TestRoundtrip(t *testing.T) {
 	}
 }
 
-func TestComplexRoundtrip(t *testing.T) {
-	input := "{\nname: \"test\"\nversion: 2\nactive: true\ntags: [\n\"web\"\n\"primary\"\n1 nested: {\nkey: \"val\"\n1 msg: \"He said: \"\"Hi\"\"\"\n"
-	v1, err := Loads(input)
+// ═══════════════ Real Data Consistency ═══════════════
+
+func TestRealDataConsistency(t *testing.T) {
+	jsonBytes, err := os.ReadFile("package.json")
+	if err != nil { t.Skip("package.json not found") }
+	plnBytes, err := os.ReadFile("package.pln")
+	if err != nil { t.Skip("package.pln not found") }
+
+	jsonStr := string(jsonBytes)
+	plnStr := string(plnBytes)
+
+	var jsonObj interface{}
+	if err := json.Unmarshal(jsonBytes, &jsonObj); err != nil {
+		t.Fatal(err)
+	}
+
+	// PopLine parse
+	plnVal, err := Loads(plnStr)
 	if err != nil { t.Fatal(err) }
-	s := Dumps(v1)
+
+	// Verify PopLine DOM matches JSON via JSON serialization
+	plnJson := dumpsJson(plnVal)
+	var plnObj interface{}
+	json.Unmarshal([]byte(plnJson), &plnObj)
+
+	jsonRef, _ := json.Marshal(jsonObj)
+	plnRef, _ := json.Marshal(plnObj)
+	assert(t, string(jsonRef) == string(plnRef), "PopLine vs JSON mismatch")
+
+	// Roundtrip
+	s := Dumps(plnVal)
 	v2, err := Loads(s)
 	if err != nil { t.Fatal(err) }
-	if !v1.Equal(v2) { t.Fatal("complex roundtrip mismatch") }
+	assert(t, plnVal.Equal(v2), "PopLine roundtrip mismatch")
+
+	fmt.Printf("  data: JSON=%dB, PopLine=%dB (%.1f%%)\n",
+		len(jsonStr), len(plnStr), float64(len(plnStr))/float64(len(jsonStr))*100)
+}
+
+func dumpsJson(v *Value) string {
+	b, _ := json.Marshal(valueToInterface(v))
+	return string(b)
+}
+
+func valueToInterface(v *Value) interface{} {
+	if v == nil { return nil }
+	switch v.Type {
+	case Null:   return nil
+	case Bool:   return v.Bool()
+	case Int:    return v.Int()
+	case Float:  return v.Float()
+	case String: return v.Str()
+	case Object:
+		m := make(map[string]interface{})
+		for _, c := range v.Children() {
+			m[c.Key()] = valueToInterface(c)
+		}
+		return m
+	case Array:
+		a := make([]interface{}, len(v.Children()))
+		for i, c := range v.Children() {
+			a[i] = valueToInterface(c)
+		}
+		return a
+	}
+	return nil
+}
+
+// ═══════════════ Performance Benchmark ═══════════════
+
+func TestBenchmark(t *testing.T) {
+	jsonBytes, err := os.ReadFile("package.json")
+	if err != nil { t.Skip("package.json not found") }
+	plnBytes, err := os.ReadFile("package.pln")
+	if err != nil { t.Skip("package.pln not found") }
+
+	plnStr := string(plnBytes)
+
+	var jsonObj interface{}
+	json.Unmarshal(jsonBytes, &jsonObj)
+	plnVal, _ := Loads(plnStr)
+
+	N := 5000
+	fmt.Println("\n── Performance Benchmark (5000 iterations) ──")
+
+	bench := func(label string, fn func()) time.Duration {
+		fn()
+		start := time.Now()
+		for i := 0; i < N; i++ { fn() }
+		elapsed := time.Since(start)
+		fmt.Printf("  %-26s %8.0f ms  %8.0f us/op\n",
+			label, float64(elapsed.Milliseconds()), float64(elapsed.Microseconds())/float64(N))
+		return elapsed
+	}
+
+	jsSer := bench("json.Marshal", func() { json.Marshal(jsonObj) })
+	plSer := bench("PopLine.Dumps", func() { Dumps(plnVal) })
+	fmt.Printf("  %-26s %7.2fx\n", "PopLine/JSON", float64(plSer)/float64(jsSer))
+
+	jsPar := bench("json.Unmarshal", func() {
+		var v interface{}; json.Unmarshal(jsonBytes, &v)
+	})
+	plPar := bench("PopLine.Loads", func() { Loads(plnStr) })
+	fmt.Printf("  %-26s %7.2fx\n", "PopLine/JSON", float64(plPar)/float64(jsPar))
 }

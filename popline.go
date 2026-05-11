@@ -3,7 +3,6 @@ package popline
 import (
 	"fmt"
 	"strconv"
-	"strings"
 )
 
 type ValueType int
@@ -40,7 +39,7 @@ func (v *Value) Key() string      { return v.key }
 func (v *Value) Bool() bool       { return v.boolVal }
 func (v *Value) Int() int64       { return v.intVal }
 func (v *Value) Float() float64   { return v.floatVal }
-func (v *Value) String() string   { return v.strVal }
+func (v *Value) Str() string      { return v.strVal }
 func (v *Value) Children() []*Value { return v.children }
 
 func (v *Value) AddToObject(key string, val *Value) {
