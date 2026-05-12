@@ -69,6 +69,15 @@ func (p *parser) parse(text string) (*Value, error) {
 		}
 
 		if len(p.frames) == 0 {
+			// Check top-level inline containers: `[ [` or `[ {`
+			if len(rest) > 1 && rest[0] == '[' {
+				rp := strings.TrimLeft(rest[1:], " \t")
+				if len(rp) > 0 && (rp[0] == '[' || rp[0] == '{') {
+					if err := p.inlineContainers(rest); err != nil { return nil, err }
+					root = p.frames[0]
+					continue
+				}
+			}
 			var v *Value
 			if rest == "{" { v = NewObject()
 			} else if rest == "[" { v = NewArray()
@@ -103,6 +112,16 @@ func (p *parser) parseObjectLine(rest string) error {
 	valPart := rest[sep+2:]
 
 	top := p.frames[len(p.frames)-1]
+
+	// Check value inline containers: `key: [ [` or `key: [ {`
+	if len(valPart) > 1 && (valPart[0] == '[' || valPart[0] == '{') {
+		rp := strings.TrimLeft(valPart[1:], " \t")
+		if len(rp) > 0 && (rp[0] == '[' || rp[0] == '{') {
+			p.key = key
+			return p.inlineContainers(valPart)
+		}
+	}
+
 	if valPart == "{" {
 		obj := NewObject()
 		top.AddToObject(key, obj)
@@ -124,6 +143,15 @@ func (p *parser) parseObjectLine(rest string) error {
 
 func (p *parser) parseArrayLine(rest string) error {
 	top := p.frames[len(p.frames)-1]
+
+	// Check array element inline containers: `[ [`、`[ {`、`{ [`、`{ {`
+	if len(rest) > 1 && (rest[0] == '[' || rest[0] == '{') {
+		rp := strings.TrimLeft(rest[1:], " \t")
+		if len(rp) > 0 && (rp[0] == '[' || rp[0] == '{') {
+			return p.inlineContainers(rest)
+		}
+	}
+
 	if rest == "{" {
 		obj := NewObject()
 		top.AddToArray(obj)
@@ -138,6 +166,39 @@ func (p *parser) parseArrayLine(rest string) error {
 		if val != nil {
 			top.AddToArray(val)
 		}
+	}
+	return nil
+}
+
+// inlineContainers parses consecutive container openers on a single line: `[ [`, `[ {`, etc.
+func (p *parser) inlineContainers(s string) error {
+	part := strings.TrimSpace(s)
+	for len(part) > 0 {
+		ch := part[0]
+		if ch != '{' && ch != '[' {
+			return fmt.Errorf("inline containers must be '{' or '['")
+		}
+		var v *Value
+		if ch == '{' {
+			v = NewObject()
+		} else {
+			v = NewArray()
+		}
+		if len(p.frames) == 0 {
+			p.frames = append(p.frames, v)
+		} else {
+			top := p.frames[len(p.frames)-1]
+			if top.Type == Object && p.key != "" {
+				top.AddToObject(p.key, v)
+				p.key = ""
+			} else if top.Type == Object {
+				top.AddToObject("", v)
+			} else {
+				top.AddToArray(v)
+			}
+			p.frames = append(p.frames, v)
+		}
+		part = strings.TrimLeft(part[1:], " \t")
 	}
 	return nil
 }

@@ -36,19 +36,69 @@ func (g *generator) writeValue(v *Value) {
 		g.pendingPop++
 		if g.top() == 'o' { g.needKey = true }
 	case Array:
-		g.startContainer('[')
-		g.push('a')
-		for _, c := range v.children {
-			g.writeValue(c)
-		}
-		g.pop()
-		g.pendingPop++
-		if g.top() == 'o' { g.needKey = true }
+		g.writeArrayInline(v, true)
 	case Null:   g.putScalar("null")
 	case Bool:   g.putScalar(strconv.FormatBool(v.boolVal))
 	case Int:    g.putScalar(strconv.FormatInt(v.intVal, 10))
 	case Float:  g.putScalar(strconv.FormatFloat(v.floatVal, 'g', -1, 64))
 	case String: g.putString(v.strVal)
+	}
+}
+
+func (g *generator) writeArrayInline(v *Value, first bool) {
+	ch := byte('[')
+	typ := byte('a')
+	if v.Type == Object { ch = '{'; typ = 'o' }
+
+	if first && g.top() == 'o' && g.awaitingValue {
+		g.buf.WriteByte(ch)
+		g.awaitingValue = false
+	} else if first {
+		g.flushPop()
+		g.buf.WriteByte(ch)
+	} else {
+		g.buf.WriteByte(ch)
+	}
+
+	c := v.children
+	canInline := v.Type == Array && len(c) > 0 &&
+		(c[0].Type == Object || c[0].Type == Array)
+
+	if canInline {
+		g.push('a')
+		g.needKey = false
+		g.awaitingValue = false
+		g.writeArrayInline(c[0], false)
+
+		for _, c2 := range c[1:] {
+			g.writeValue(c2)
+		}
+
+		g.pop()
+		g.pendingPop++
+		if g.top() == 'o' { g.needKey = true }
+	} else {
+		g.buf.WriteByte('\n')
+		g.push(typ)
+		g.needKey = (typ == 'o')
+		g.awaitingValue = false
+		if v.Type == Object {
+			for _, c2 := range c {
+				g.flushPop()
+				g.buf.WriteString(c2.key)
+				g.buf.WriteString(": ")
+				g.needKey = false
+				g.awaitingValue = true
+				g.writeValue(c2)
+			}
+		} else {
+			for _, c2 := range c {
+				g.writeValue(c2)
+			}
+		}
+		g.pop()
+		g.pendingPop++
+		if g.top() == 'o' { g.needKey = true }
 	}
 }
 
