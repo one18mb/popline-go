@@ -1,51 +1,53 @@
 package pln
 
 import (
-	"strconv"
+	"fmt"
 	"strings"
 )
 
 type generator struct {
 	buf           strings.Builder
 	stack         []byte
-	pendingPop    int
 	needKey       bool
 	awaitingValue bool
 }
 
 func Marshal(v *Value) string {
 	g := &generator{}
-	g.writeValue(v)
+	g.writeValue(v, 0)
 	return g.buf.String()
 }
 
-func (g *generator) writeValue(v *Value) {
+func (g *generator) writeValue(v *Value, closePop int) {
 	switch v.Type {
 	case Object:
 		g.startContainer('{')
 		g.push('o')
-		for _, c := range v.children {
-			g.flushPop()
+		n := len(v.children)
+		for i, c := range v.children {
+			childPop := 0
+			if i == n-1 {
+				childPop = closePop + 1
+			}
 			g.buf.WriteString(c.key)
 			g.buf.WriteString(": ")
 			g.needKey = false
 			g.awaitingValue = true
-			g.writeValue(c)
+			g.writeValue(c, childPop)
 		}
 		g.pop()
-		g.pendingPop++
 		if g.top() == 'o' { g.needKey = true }
 	case Array:
-		g.writeArrayInline(v, true)
-	case Null:   g.putScalar("null")
-	case Bool:   g.putScalar(strconv.FormatBool(v.boolVal))
-	case Int:    g.putScalar(strconv.FormatInt(v.intVal, 10))
-	case Float:  g.putScalar(strconv.FormatFloat(v.floatVal, 'g', -1, 64))
-	case String: g.putString(v.strVal)
+		g.writeArrayInline(v, true, closePop)
+	case Null:   g.putScalar("null", closePop)
+	case Bool:   g.putScalar(fmt.Sprintf("%t", v.boolVal), closePop)
+	case Int:    g.putScalar(fmt.Sprintf("%d", v.intVal), closePop)
+	case Float:  g.putScalar(fmt.Sprintf("%g", v.floatVal), closePop)
+	case String: g.putString(v.strVal, closePop)
 	}
 }
 
-func (g *generator) writeArrayInline(v *Value, first bool) {
+func (g *generator) writeArrayInline(v *Value, first bool, closePop int) {
 	ch := byte('[')
 	typ := byte('a')
 	if v.Type == Object { ch = '{'; typ = 'o' }
@@ -54,52 +56,43 @@ func (g *generator) writeArrayInline(v *Value, first bool) {
 		g.buf.WriteByte(ch)
 		g.awaitingValue = false
 	} else if first {
-		g.flushPop()
 		g.buf.WriteByte(ch)
 	} else {
 		g.buf.WriteByte(ch)
 	}
 
 	c := v.children
-	canInline := v.Type == Array && len(c) > 0 &&
-		(c[0].Type == Object || c[0].Type == Array)
 
-	if canInline {
-		g.push('a')
-		g.needKey = false
-		g.awaitingValue = false
-		g.writeArrayInline(c[0], false)
-
-		for _, c2 := range c[1:] {
-			g.writeValue(c2)
+	// Always use non-inline path for correct closePop propagation
+	g.buf.WriteByte('\n')
+	g.push(typ)
+	g.needKey = (typ == 'o')
+	g.awaitingValue = false
+	if v.Type == Object {
+		n := len(c)
+		for i, c2 := range c {
+			childPop := 0
+			if i == n-1 {
+				childPop = closePop + 1
+			}
+			g.buf.WriteString(c2.key)
+			g.buf.WriteString(": ")
+			g.needKey = false
+			g.awaitingValue = true
+			g.writeValue(c2, childPop)
 		}
-
-		g.pop()
-		g.pendingPop++
-		if g.top() == 'o' { g.needKey = true }
 	} else {
-		g.buf.WriteByte('\n')
-		g.push(typ)
-		g.needKey = (typ == 'o')
-		g.awaitingValue = false
-		if v.Type == Object {
-			for _, c2 := range c {
-				g.flushPop()
-				g.buf.WriteString(c2.key)
-				g.buf.WriteString(": ")
-				g.needKey = false
-				g.awaitingValue = true
-				g.writeValue(c2)
+		n := len(c)
+		for i, c2 := range c {
+			childPop := 0
+			if i == n-1 {
+				childPop = closePop + 1
 			}
-		} else {
-			for _, c2 := range c {
-				g.writeValue(c2)
-			}
+			g.writeValue(c2, childPop)
 		}
-		g.pop()
-		g.pendingPop++
-		if g.top() == 'o' { g.needKey = true }
 	}
+	g.pop()
+	if g.top() == 'o' { g.needKey = true }
 }
 
 func (g *generator) startContainer(ch byte) {
@@ -107,25 +100,26 @@ func (g *generator) startContainer(ch byte) {
 		g.buf.WriteByte(ch)
 		g.awaitingValue = false
 	} else {
-		g.flushPop()
 		g.buf.WriteByte(ch)
 	}
 	g.buf.WriteByte('\n')
 }
 
-func (g *generator) putScalar(s string) {
+func (g *generator) putScalar(s string, closePop int) {
 	if g.top() == 'o' {
 		g.awaitingValue = false
 	}
 	g.buf.WriteString(s)
-	g.flushPop()
+	if closePop > 0 {
+		g.buf.WriteString(fmt.Sprintf(" %d", closePop))
+	}
 	g.buf.WriteByte('\n')
 	if g.top() == 'o' {
 		g.needKey = true
 	}
 }
 
-func (g *generator) putString(s string) {
+func (g *generator) putString(s string, closePop int) {
 	if g.top() == 'o' {
 		g.awaitingValue = false
 		g.needKey = true
@@ -136,16 +130,10 @@ func (g *generator) putString(s string) {
 		if c == '"' { g.buf.WriteByte('"') }
 	}
 	g.buf.WriteByte('"')
-	g.flushPop()
-	g.buf.WriteByte('\n')
-}
-
-func (g *generator) flushPop() {
-	if g.pendingPop > 0 {
-		g.buf.WriteString(strconv.Itoa(g.pendingPop))
-		g.buf.WriteByte(' ')
-		g.pendingPop = 0
+	if closePop > 0 {
+		g.buf.WriteString(fmt.Sprintf(" %d", closePop))
 	}
+	g.buf.WriteByte('\n')
 }
 
 func (g *generator) push(c byte) {

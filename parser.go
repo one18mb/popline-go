@@ -43,7 +43,7 @@ func (p *parser) parse(text string) (*Value, error) {
 					top.AddToArray(v)
 				}
 				if nPop > 0 {
-					if nPop >= len(p.frames) {
+					if nPop > len(p.frames) {
 						return nil, fmt.Errorf("suffix pop %d exceeds depth %d (would pop root)", nPop, len(p.frames))
 					}
 					p.frames = p.frames[:len(p.frames)-nPop]
@@ -54,26 +54,7 @@ func (p *parser) parse(text string) (*Value, error) {
 
 		if len(line) == 0 { continue }
 
-		// pop prefix
-		nPop := 0
-		valueStart := 0
-		i := 0
-		for i < len(line) && line[i] >= '0' && line[i] <= '9' { i++ }
-		if i > 0 && i < len(line) && line[i] == ' ' {
-			nPop, _ = strconv.Atoi(line[:i])
-			valueStart = i + 1
-		}
-
-		if nPop > len(p.frames) {
-			return nil, fmt.Errorf("pop %d exceeds depth %d", nPop, len(p.frames))
-		}
-		p.frames = p.frames[:len(p.frames)-nPop]
-
-		rest := line[valueStart:]
-		if len(rest) == 0 {
-			return nil, fmt.Errorf("bare pop line not allowed")
-		}
-
+		rest := line
 		if len(p.frames) == 0 {
 			// Check top-level inline containers: `[ [` or `[ {`
 			if len(rest) > 1 && rest[0] == '[' {
@@ -137,13 +118,13 @@ func (p *parser) parseObjectLine(rest string) error {
 		top.AddToObject(key, arr)
 		p.frames = append(p.frames, arr)
 	} else {
-		// Extract trailing pop suffix for leaf values
+		// Forward-scan pop suffix for leaf values
 		nPop := 0
-		vlen := len(valPart)
-		if vlen > 0 && valPart[0] != '{' && valPart[0] != '[' {
-			nPop = trimPopSuffix(valPart, &vlen)
+		valLen := len(valPart)
+		if valLen > 0 && valPart[0] != '{' && valPart[0] != '[' {
+			nPop = fwdTrimPopSuffix(valPart, &valLen)
 		}
-		valPart = valPart[:vlen]
+		valPart = valPart[:valLen]
 		if len(valPart) == 0 {
 			return nil
 		}
@@ -155,7 +136,7 @@ func (p *parser) parseObjectLine(rest string) error {
 			top.AddToObject(key, val)
 		}
 		if nPop > 0 {
-			if nPop >= len(p.frames) {
+			if nPop > len(p.frames) {
 				return fmt.Errorf("suffix pop %d exceeds depth %d (would pop root)", nPop, len(p.frames))
 			}
 			p.frames = p.frames[:len(p.frames)-nPop]
@@ -184,13 +165,13 @@ func (p *parser) parseArrayLine(rest string) error {
 		top.AddToArray(arr)
 		p.frames = append(p.frames, arr)
 	} else {
-		// Extract trailing pop suffix for leaf values
+		// Forward-scan pop suffix for leaf values
 		nPop := 0
-		restLen := len(rest)
-		if restLen > 0 && rest[0] != '{' && rest[0] != '[' {
-			nPop = trimPopSuffix(rest, &restLen)
+		restValLen := len(rest)
+		if restValLen > 0 && rest[0] != '{' && rest[0] != '[' {
+			nPop = fwdTrimPopSuffix(rest, &restValLen)
 		}
-		trimmedRest := rest[:restLen]
+		trimmedRest := rest[:restValLen]
 		if len(trimmedRest) == 0 {
 			return nil
 		}
@@ -201,7 +182,7 @@ func (p *parser) parseArrayLine(rest string) error {
 			top.AddToArray(val)
 		}
 		if nPop > 0 {
-			if nPop >= len(p.frames) {
+			if nPop > len(p.frames) {
 				return fmt.Errorf("suffix pop %d exceeds depth %d (would pop root)", nPop, len(p.frames))
 			}
 			p.frames = p.frames[:len(p.frames)-nPop]
@@ -316,29 +297,27 @@ func parseQuoted(content string, p *parser) (*Value, error) {
 	return nil, nil
 }
 
-// trimPopSuffix extracts trailing " N" from content, returns pop count, adjusts *contentLen.
-// If no valid suffix is found, *contentLen is unchanged and 0 is returned.
-func trimPopSuffix(s string, contentLen *int) int {
-	clen := *contentLen
-	if clen < 2 {
-		return 0
+// fwdTrimPopSuffix forward-scans for " N" pop suffix: when a space is found,
+// checks if remaining chars are all digits. Returns pop count and sets *valueLen.
+func fwdTrimPopSuffix(s string, valueLen *int) int {
+	inString := false
+	for i := 0; i < len(s); i++ {
+		if s[i] == '"' { inString = !inString }
+		if !inString && s[i] == ' ' {
+			allDigits := true
+			for j := i + 1; j < len(s); j++ {
+				if s[j] < '0' || s[j] > '9' { allDigits = false; break }
+			}
+			if allDigits && i+1 < len(s) {
+				n := 0
+				for j := i + 1; j < len(s); j++ { n = n*10 + int(s[j]-'0') }
+				*valueLen = i
+				return n
+			}
+		}
 	}
-	i := clen - 1
-	if s[i] < '0' || s[i] > '9' {
-		return 0
-	}
-	for i > 0 && s[i-1] >= '0' && s[i-1] <= '9' {
-		i--
-	}
-	if i == 0 || s[i-1] != ' ' {
-		return 0
-	}
-	n := 0
-	for j := i; j < clen; j++ {
-		n = n*10 + int(s[j]-'0')
-	}
-	*contentLen = i - 1
-	return n
+	*valueLen = len(s)
+	return 0
 }
 
 // popSuffixAfter validates content after closing quote: ""=0, " N"=N, other=-1.

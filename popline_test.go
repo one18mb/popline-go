@@ -42,10 +42,10 @@ func TestNesting(t *testing.T) {
 }
 
 func TestPop(t *testing.T) {
-	v, e := Unmarshal("{\nouter: {\ninner: \"x\"\n1 mid: \"y\"\n"); v = chk(t, v, e)
+	v, e := Unmarshal("{\nouter: {\ninner: \"x\" 1\nmid: \"y\"\n"); v = chk(t, v, e)
 	assert(t, len(v.Children()) == 2, "pop count")
 
-	v, e = Unmarshal("{\na: {\nb: {\nc: \"deep\"\n2 x: \"top\"\n"); v = chk(t, v, e)
+	v, e = Unmarshal("{\na: {\nb: {\nc: \"deep\" 2\nx: \"top\"\n"); v = chk(t, v, e)
 	assert(t, v.Children()[1].Str() == "top", "batch pop")
 }
 
@@ -67,9 +67,9 @@ func TestErrors(t *testing.T) {
 func TestRoundtrip(t *testing.T) {
 	cases := []string{
 		"{\na: 1\n",
-		"{\na: {\nb: 1\nc: 2\n1 d: 3\n",
+		"{\na: {\nb: 1\nc: 2 1\nd: 3\n",
 		"[\n1\n2\n3\n",
-		"{\na: [\n1\n2\n1 b: true\n",
+		"{\na: [\n1\n2 1\nb: true\n",
 		"{\na: true\nb: false\nc: null\n",
 	}
 	for i, input := range cases {
