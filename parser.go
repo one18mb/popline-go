@@ -100,14 +100,6 @@ func (p *parser) parseObjectLine(rest string) error {
 
 	top := p.frames[len(p.frames)-1]
 
-	// Check value inline containers: `key: [ [` or `key: [ {`
-	if len(valPart) > 1 && (valPart[0] == '[' || valPart[0] == '{') {
-		rp := strings.TrimLeft(valPart[1:], " \t")
-		if len(rp) > 0 && (rp[0] == '[' || rp[0] == '{') {
-			p.key = key
-			return p.inlineContainers(valPart)
-		}
-	}
 
 	if valPart == "{" {
 		obj := NewObject()
@@ -147,14 +139,6 @@ func (p *parser) parseObjectLine(rest string) error {
 
 func (p *parser) parseArrayLine(rest string) error {
 	top := p.frames[len(p.frames)-1]
-
-	// Check array element inline containers: `[ [`、`[ {`、`{ [`、`{ {`
-	if len(rest) > 1 && (rest[0] == '[' || rest[0] == '{') {
-		rp := strings.TrimLeft(rest[1:], " \t")
-		if len(rp) > 0 && (rp[0] == '[' || rp[0] == '{') {
-			return p.inlineContainers(rest)
-		}
-	}
 
 	if rest == "{" {
 		obj := NewObject()
