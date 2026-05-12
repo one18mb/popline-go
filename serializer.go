@@ -116,13 +116,12 @@ func (g *generator) startContainer(ch byte) {
 func (g *generator) putScalar(s string) {
 	if g.top() == 'o' {
 		g.awaitingValue = false
-		g.buf.WriteString(s)
-		g.buf.WriteByte('\n')
+	}
+	g.buf.WriteString(s)
+	g.flushPop()
+	g.buf.WriteByte('\n')
+	if g.top() == 'o' {
 		g.needKey = true
-	} else {
-		g.flushPop()
-		g.buf.WriteString(s)
-		g.buf.WriteByte('\n')
 	}
 }
 
@@ -130,8 +129,6 @@ func (g *generator) putString(s string) {
 	if g.top() == 'o' {
 		g.awaitingValue = false
 		g.needKey = true
-	} else {
-		g.flushPop()
 	}
 	g.buf.WriteByte('"')
 	for _, c := range s {
@@ -139,6 +136,7 @@ func (g *generator) putString(s string) {
 		if c == '"' { g.buf.WriteByte('"') }
 	}
 	g.buf.WriteByte('"')
+	g.flushPop()
 	g.buf.WriteByte('\n')
 }
 

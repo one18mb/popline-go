@@ -31,7 +31,7 @@ func (p *parser) parse(text string) (*Value, error) {
 		line = strings.TrimSuffix(line, "\r")
 
 		if p.inString {
-			v, done := p.handleStringLine(line)
+			v, nPop, done := p.handleStringLine(line)
 			if done {
 				p.inString = false
 				p.strbuf.Reset()
@@ -41,6 +41,12 @@ func (p *parser) parse(text string) (*Value, error) {
 					top.AddToObject(p.key, v)
 				} else {
 					top.AddToArray(v)
+				}
+				if nPop > 0 {
+					if nPop >= len(p.frames) {
+						return nil, fmt.Errorf("suffix pop %d exceeds depth %d (would pop root)", nPop, len(p.frames))
+					}
+					p.frames = p.frames[:len(p.frames)-nPop]
 				}
 			}
 			continue
@@ -131,11 +137,28 @@ func (p *parser) parseObjectLine(rest string) error {
 		top.AddToObject(key, arr)
 		p.frames = append(p.frames, arr)
 	} else {
+		// Extract trailing pop suffix for leaf values
+		nPop := 0
+		vlen := len(valPart)
+		if vlen > 0 && valPart[0] != '{' && valPart[0] != '[' {
+			nPop = trimPopSuffix(valPart, &vlen)
+		}
+		valPart = valPart[:vlen]
+		if len(valPart) == 0 {
+			return nil
+		}
+
 		p.key = key
 		val, err := parseScalar(valPart, p)
 		if err != nil { return err }
 		if val != nil {
 			top.AddToObject(key, val)
+		}
+		if nPop > 0 {
+			if nPop >= len(p.frames) {
+				return fmt.Errorf("suffix pop %d exceeds depth %d (would pop root)", nPop, len(p.frames))
+			}
+			p.frames = p.frames[:len(p.frames)-nPop]
 		}
 	}
 	return nil
@@ -161,10 +184,27 @@ func (p *parser) parseArrayLine(rest string) error {
 		top.AddToArray(arr)
 		p.frames = append(p.frames, arr)
 	} else {
-		val, err := parseScalar(rest, p)
+		// Extract trailing pop suffix for leaf values
+		nPop := 0
+		restLen := len(rest)
+		if restLen > 0 && rest[0] != '{' && rest[0] != '[' {
+			nPop = trimPopSuffix(rest, &restLen)
+		}
+		trimmedRest := rest[:restLen]
+		if len(trimmedRest) == 0 {
+			return nil
+		}
+
+		val, err := parseScalar(trimmedRest, p)
 		if err != nil { return err }
 		if val != nil {
 			top.AddToArray(val)
+		}
+		if nPop > 0 {
+			if nPop >= len(p.frames) {
+				return fmt.Errorf("suffix pop %d exceeds depth %d (would pop root)", nPop, len(p.frames))
+			}
+			p.frames = p.frames[:len(p.frames)-nPop]
 		}
 	}
 	return nil
@@ -203,7 +243,7 @@ func (p *parser) inlineContainers(s string) error {
 	return nil
 }
 
-func (p *parser) handleStringLine(line string) (*Value, bool) {
+func (p *parser) handleStringLine(line string) (*Value, int, bool) {
 	var result strings.Builder
 	i := 0
 	for i < len(line) {
@@ -211,10 +251,11 @@ func (p *parser) handleStringLine(line string) (*Value, bool) {
 			if i+1 < len(line) && line[i+1] == '"' {
 				result.WriteByte('"'); i += 2
 			} else {
-				after := strings.TrimSpace(line[i+1:])
-				if after != "" { return nil, false }
+				after := line[i+1:]
+				nPop := popSuffixAfter(after)
+				if nPop < 0 { return nil, 0, false }
 				p.strbuf.WriteString(result.String())
-				return NewString(p.strbuf.String()), true
+				return NewString(p.strbuf.String()), nPop, true
 			}
 		} else {
 			result.WriteByte(line[i]); i++
@@ -222,7 +263,7 @@ func (p *parser) handleStringLine(line string) (*Value, bool) {
 	}
 	p.strbuf.WriteString(result.String())
 	p.strbuf.WriteByte('\n')
-	return nil, false
+	return nil, 0, false
 }
 
 func parseScalar(s string, p *parser) (*Value, error) {
@@ -273,6 +314,52 @@ func parseQuoted(content string, p *parser) (*Value, error) {
 	p.strbuf.WriteString(content)
 	p.strbuf.WriteByte('\n')
 	return nil, nil
+}
+
+// trimPopSuffix extracts trailing " N" from content, returns pop count, adjusts *contentLen.
+// If no valid suffix is found, *contentLen is unchanged and 0 is returned.
+func trimPopSuffix(s string, contentLen *int) int {
+	clen := *contentLen
+	if clen < 2 {
+		return 0
+	}
+	i := clen - 1
+	if s[i] < '0' || s[i] > '9' {
+		return 0
+	}
+	for i > 0 && s[i-1] >= '0' && s[i-1] <= '9' {
+		i--
+	}
+	if i == 0 || s[i-1] != ' ' {
+		return 0
+	}
+	n := 0
+	for j := i; j < clen; j++ {
+		n = n*10 + int(s[j]-'0')
+	}
+	*contentLen = i - 1
+	return n
+}
+
+// popSuffixAfter validates content after closing quote: ""=0, " N"=N, other=-1.
+func popSuffixAfter(s string) int {
+	if len(s) == 0 {
+		return 0
+	}
+	if s[0] != ' ' {
+		return -1
+	}
+	if len(s) < 2 || s[1] < '0' || s[1] > '9' {
+		return -1
+	}
+	n := 0
+	for i := 1; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return -1
+		}
+		n = n*10 + int(s[i]-'0')
+	}
+	return n
 }
 
 func isKeyValid(key string) bool {
