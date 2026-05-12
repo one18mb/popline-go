@@ -38,3 +38,8 @@ Data: `package.json` (17011 B) → `package.pln` (13074 B, **76.9%**), 5000 iter
 ```bash
 go test
 ```
+
+## Acknowledgments
+This project was developed with the assistance of:
+- [Claude Code](https://claude.ai) (Anthropic)
+- [DeepSeek](https://deepseek.com) (DeepSeek)
