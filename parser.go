@@ -25,9 +25,18 @@ func (p *parser) parse(text string) (*Value, error) {
 	p.inString = false
 
 	var root *Value
-	lines := strings.Split(text, "\n")
+	s := text
 
-	for _, line := range lines {
+	for len(s) > 0 {
+		nl := strings.IndexByte(s, '\n')
+		var line string
+		if nl >= 0 {
+			line = s[:nl]
+			s = s[nl+1:]
+		} else {
+			line = s
+			s = ""
+		}
 		line = strings.TrimSuffix(line, "\r")
 
 		if p.inString {
@@ -49,28 +58,41 @@ func (p *parser) parse(text string) (*Value, error) {
 					p.frames = p.frames[:len(p.frames)-nPop]
 				}
 			}
+			if nl < 0 { break }
 			continue
 		}
 
-		if len(line) == 0 { continue }
+		if len(line) == 0 {
+			if len(p.frames) > 0 {
+				return nil, fmt.Errorf("empty line not allowed in message body")
+			}
+			continue
+		}
 
 		rest := line
 		if len(p.frames) == 0 {
-			// Check top-level inline containers: `[ [` or `[ {`
 			if len(rest) > 1 && rest[0] == '[' {
 				rp := strings.TrimLeft(rest[1:], " \t")
 				if len(rp) > 0 && (rp[0] == '[' || rp[0] == '{') {
 					if err := p.inlineContainers(rest); err != nil { return nil, err }
 					root = p.frames[0]
+					if nl < 0 { break }
 					continue
 				}
 			}
-			var v *Value
-			if rest == "{" { v = NewObject()
-			} else if rest == "[" { v = NewArray()
-			} else { return nil, fmt.Errorf("top level must be object or array") }
-			root = v
-			p.frames = append(p.frames, v)
+			if rest == "{" {
+				root = NewObject()
+				p.frames = append(p.frames, root)
+			} else if rest == "[" {
+				root = NewArray()
+				p.frames = append(p.frames, root)
+			} else {
+				val, err := parseScalar(rest, p)
+				if err != nil { return nil, err }
+				root = val
+				break // scalar root: message complete
+			}
+			if nl < 0 { break }
 			continue
 		}
 
@@ -82,6 +104,7 @@ func (p *parser) parse(text string) (*Value, error) {
 			err := p.parseArrayLine(rest)
 			if err != nil { return nil, err }
 		}
+		if nl < 0 { break }
 	}
 
 	return root, nil
@@ -175,7 +198,6 @@ func (p *parser) parseArrayLine(rest string) error {
 	return nil
 }
 
-// inlineContainers parses consecutive container openers on a single line: `[ [`, `[ {`, etc.
 func (p *parser) inlineContainers(s string) error {
 	part := strings.TrimSpace(s)
 	for len(part) > 0 {
@@ -281,8 +303,6 @@ func parseQuoted(content string, p *parser) (*Value, error) {
 	return nil, nil
 }
 
-// fwdTrimPopSuffix forward-scans for " N" pop suffix: when a space is found,
-// checks if remaining chars are all digits. Returns pop count and sets *valueLen.
 func fwdTrimPopSuffix(s string, valueLen *int) int {
 	inString := false
 	for i := 0; i < len(s); i++ {
@@ -304,7 +324,6 @@ func fwdTrimPopSuffix(s string, valueLen *int) int {
 	return 0
 }
 
-// popSuffixAfter validates content after closing quote: ""=0, " N"=N, other=-1.
 func popSuffixAfter(s string) int {
 	if len(s) == 0 {
 		return 0

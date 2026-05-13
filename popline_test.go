@@ -36,6 +36,29 @@ func TestBasicTypes(t *testing.T) {
 	assert(t, v.Children()[2].Type == Null, "null")
 }
 
+func TestScalarRoot(t *testing.T) {
+	v, e := Unmarshal("42"); v = chk(t, v, e)
+	assert(t, v.Type == Int && v.Int() == 42, "int root")
+
+	v, e = Unmarshal("3.14"); v = chk(t, v, e)
+	assert(t, v.Type == Float, "float root")
+
+	v, e = Unmarshal("\"hello\""); v = chk(t, v, e)
+	assert(t, v.Type == String && v.Str() == "hello", "string root")
+
+	v, e = Unmarshal("true"); v = chk(t, v, e)
+	assert(t, v.Type == Bool && v.Bool() == true, "true root")
+
+	v, e = Unmarshal("false"); v = chk(t, v, e)
+	assert(t, v.Type == Bool && v.Bool() == false, "false root")
+
+	v, e = Unmarshal("null"); v = chk(t, v, e)
+	assert(t, v.Type == Null, "null root")
+
+	v, e = Unmarshal("-42"); v = chk(t, v, e)
+	assert(t, v.Type == Int && v.Int() == -42, "negative int root")
+}
+
 func TestNesting(t *testing.T) {
 	v, e := Unmarshal("{\nouter: {\ninner: \"value\"\n"); v = chk(t, v, e)
 	assert(t, v.Children()[0].Children()[0].Str() == "value", "nested")
@@ -55,11 +78,17 @@ func TestStrings(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
-	for _, s := range []string{"42\n", "\"str\"\n", "true\n", "{\nbad:key: 1\n", "{\n\"key\": 1\n"} {
+	for _, s := range []string{"{\nbad:key: 1\n", "{\n\"key\": 1\n"} {
 		if _, err := Unmarshal(s); err == nil {
 			t.Fatalf("expected error for: %s", s[:20])
 		}
 	}
+}
+
+func TestEmptyLines(t *testing.T) {
+	// Empty line inside container should fail
+	_, err := Unmarshal("{\n\nkey: 1\n")
+	if err == nil { t.Fatal("expected error for empty line in container") }
 }
 
 // ═══════════════ Roundtrip ═══════════════
@@ -80,6 +109,20 @@ func TestRoundtrip(t *testing.T) {
 			v2, err := Unmarshal(s)
 			if err != nil { t.Fatal(err) }
 			if !v1.Equal(v2) { t.Fatal("roundtrip mismatch") }
+		})
+	}
+}
+
+func TestScalarRoundtrip(t *testing.T) {
+	cases := []string{"42", "-42", "3.14", "\"hello\"", "true", "false", "null"}
+	for i, input := range cases {
+		t.Run(fmt.Sprintf("scalar-rt-%d", i), func(t *testing.T) {
+			v1, err := Unmarshal(input)
+			if err != nil { t.Fatal(err) }
+			s := Marshal(v1)
+			v2, err := Unmarshal(s)
+			if err != nil { t.Fatal(err) }
+			if !v1.Equal(v2) { t.Fatal("scalar roundtrip mismatch") }
 		})
 	}
 }
