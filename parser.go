@@ -51,12 +51,10 @@ func (p *parser) parse(text string) (*Value, error) {
 				} else {
 					top.AddToArray(v)
 				}
-				if nPop > 0 {
-					if nPop > len(p.frames) {
-						return nil, fmt.Errorf("suffix pop %d exceeds depth %d (would pop root)", nPop, len(p.frames))
-					}
-					p.frames = p.frames[:len(p.frames)-nPop]
+				if nPop > len(p.frames) {
+					return nil, fmt.Errorf("suffix pop %d exceeds depth %d (would pop root)", nPop, len(p.frames))
 				}
+				p.frames = p.frames[:len(p.frames)-nPop]
 			}
 			if nl < 0 { break }
 			continue
@@ -140,9 +138,6 @@ func (p *parser) parseObjectLine(rest string) error {
 			nPop = fwdTrimPopSuffix(valPart, &valLen)
 		}
 		valPart = valPart[:valLen]
-		if len(valPart) == 0 {
-			return nil
-		}
 
 		p.key = key
 		val, err := parseScalar(valPart, p)
@@ -150,12 +145,10 @@ func (p *parser) parseObjectLine(rest string) error {
 		if val != nil {
 			top.AddToObject(key, val)
 		}
-		if nPop > 0 {
-			if nPop > len(p.frames) {
-				return fmt.Errorf("suffix pop %d exceeds depth %d (would pop root)", nPop, len(p.frames))
-			}
-			p.frames = p.frames[:len(p.frames)-nPop]
+		if nPop > len(p.frames) {
+			return fmt.Errorf("suffix pop %d exceeds depth %d (would pop root)", nPop, len(p.frames))
 		}
+		p.frames = p.frames[:len(p.frames)-nPop]
 	}
 	return nil
 }
@@ -179,21 +172,16 @@ func (p *parser) parseArrayLine(rest string) error {
 			nPop = fwdTrimPopSuffix(rest, &restValLen)
 		}
 		trimmedRest := rest[:restValLen]
-		if len(trimmedRest) == 0 {
-			return nil
-		}
 
 		val, err := parseScalar(trimmedRest, p)
 		if err != nil { return err }
 		if val != nil {
 			top.AddToArray(val)
 		}
-		if nPop > 0 {
-			if nPop > len(p.frames) {
-				return fmt.Errorf("suffix pop %d exceeds depth %d (would pop root)", nPop, len(p.frames))
-			}
-			p.frames = p.frames[:len(p.frames)-nPop]
+		if nPop > len(p.frames) {
+			return fmt.Errorf("suffix pop %d exceeds depth %d (would pop root)", nPop, len(p.frames))
 		}
+		p.frames = p.frames[:len(p.frames)-nPop]
 	}
 	return nil
 }
