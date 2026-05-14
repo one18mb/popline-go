@@ -336,7 +336,7 @@ func isKeyValid(key string) bool {
 	if len(key) == 0 { return false }
 	for _, c := range key {
 		if c == ':' || c == '"' || c == '{' ||
-			c == '[' || c == '#' ||
+			c == '[' ||
 			c == ' ' || c == '\t' || c == '\n' || c == '\r' {
 			return false
 		}
