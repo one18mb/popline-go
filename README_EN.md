@@ -26,7 +26,7 @@ obj.AddToObject("name", pln.NewString("test"))
 
 ## Performance
 
-Data: `package.json` (17011 B) → `package.pln` (13074 B, **76.9%**), 5000 iterations
+Data: `test-package.json` (17011 B) → `test-package.pln` (13074 B, **76.9%**), 5000 iterations
 
 | Operation | encoding/json | popline | Ratio |
 |-----------|--------------|---------|-------|
