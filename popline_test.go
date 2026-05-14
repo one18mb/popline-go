@@ -130,10 +130,10 @@ func TestScalarRoundtrip(t *testing.T) {
 // ═══════════════ Real Data Consistency ═══════════════
 
 func TestRealDataConsistency(t *testing.T) {
-	jsonBytes, err := os.ReadFile("test-package.json")
-	if err != nil { t.Skip("test-package.json not found") }
-	plnBytes, err := os.ReadFile("test-package.pln")
-	if err != nil { t.Skip("test-package.pln not found") }
+	jsonBytes, err := os.ReadFile("test.json")
+	if err != nil { t.Skip("test.json not found") }
+	plnBytes, err := os.ReadFile("test.pln")
+	if err != nil { t.Skip("test.pln not found") }
 
 	jsonStr := string(jsonBytes)
 	plnStr := string(plnBytes)
@@ -198,10 +198,10 @@ func valueToInterface(v *Value) interface{} {
 // ═══════════════ Performance Benchmark ═══════════════
 
 func TestBenchmark(t *testing.T) {
-	jsonBytes, err := os.ReadFile("test-package.json")
-	if err != nil { t.Skip("test-package.json not found") }
-	plnBytes, err := os.ReadFile("test-package.pln")
-	if err != nil { t.Skip("test-package.pln not found") }
+	jsonBytes, err := os.ReadFile("test.json")
+	if err != nil { t.Skip("test.json not found") }
+	plnBytes, err := os.ReadFile("test.pln")
+	if err != nil { t.Skip("test.pln not found") }
 
 	plnStr := string(plnBytes)
 
